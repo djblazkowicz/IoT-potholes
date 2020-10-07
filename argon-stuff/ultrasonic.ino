@@ -28,5 +28,5 @@ void loop()
     inch = rangefinder.distInch();
     unsigned long calcTime = micros() - start;
     Serial.printf("Range finding duration: %lu | Distance in inches: %.2f\n", calcTime, inch);
-    delay(500);
+    delay(10);
 }
