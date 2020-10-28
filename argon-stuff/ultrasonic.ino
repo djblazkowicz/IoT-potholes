@@ -1,4 +1,18 @@
+/*
+this sketch is used to detect if the measured distance is above the treshold for a long enough timeline, then upload the measurement to google cloud database.
+
+Gabor Nemeth 2020
+
+TODO:
+-GPS module
+-Communication with PI ZERO CAM
+
+*/
+
+// ultrasonic rangefinder lib
 #include <HC-SR04.h>
+
+
 
 const int triggerPin = A0;
 const int echoPin = D0;
@@ -15,6 +29,7 @@ void setup()
     Particle.variable("inch", inch);
     Serial.begin(9600);
     rangefinder.init();
+    //get average distance from sensor as baseline so we have something to measure against
     baseline = get_average_inch();
 
 }
@@ -29,12 +44,13 @@ void loop()
         if (check_spike)
         {
             pothole_meter++;
-            Serial.printf("POTHOLE METER: " + String(pothole_meter) + "\n");
+            //Serial.printf("POTHOLE METER: " + String(pothole_meter) + "\n");
             
         } else {
             if (pothole_meter > 100) 
             {
-                (Serial.printf("POTHOLE SIZE: " + String(pothole_meter) + "*******************************************************************************************************************\n"));
+                (Serial.printf("POTHOLE SIZE: " + String(pothole_meter) + "\n"));
+                //publish var to particle cloud, which will activate google cloud function to insert into sql db
                 Particle.publish("my_event", String(pothole_meter), PRIVATE);
                 pothole_meter = 0;
             } else
@@ -46,7 +62,7 @@ void loop()
 
 }
 
-
+// this is used to establish a baseline distance
 double get_average_inch() {
 
     double buffer = 0;
@@ -74,7 +90,7 @@ double get_average_inch() {
     return buffer;
 }
 
-
+//this is to check if distance is beyond treshold
 bool spike(double baseline, double current, double treshold) 
 {
     double percent = (current / baseline) * 100;
