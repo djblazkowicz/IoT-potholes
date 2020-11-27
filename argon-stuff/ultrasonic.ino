@@ -1,33 +1,33 @@
 /*
 this sketch is used to detect if the measured distance is above the treshold for a long enough timeline, then upload the measurement to google cloud database.
-
 Gabor Nemeth 2020
-
 TODO:
--GPS module
 -Communication with PI ZERO CAM
-
 */
-
+#include <TinyGPS.h>
 // ultrasonic rangefinder lib
 #include <HC-SR04.h>
 
 
-
+TinyGPS gps;
+char szInfo[64];
 const int triggerPin = A0;
 const int echoPin = D0;
 const int HISTORY_LIMIT = 1000;
 const int SAMPLE_RATE = 100;
-const double TRESHOLD = 120.0;
+const double TRESHOLD = 166.0;
 int counter = 0,inch_history_counter = 0, pothole_meter = 0;
 double inch,avg_inch = 0,inch_history[HISTORY_LIMIT],baseline;
 bool check_spike = false;
+int pothole_detected = 0;
 HC_SR04 rangefinder = HC_SR04(triggerPin, echoPin);
 
 void setup()
 {
     Particle.variable("inch", inch);
+    Particle.variable("pothole_detected", pothole_detected);
     Serial.begin(9600);
+    Serial1.begin(9600);
     rangefinder.init();
     //get average distance from sensor as baseline so we have something to measure against
     baseline = get_average_inch();
@@ -47,12 +47,20 @@ void loop()
             //Serial.printf("POTHOLE METER: " + String(pothole_meter) + "\n");
             
         } else {
-            if (pothole_meter > 100) 
+            
+            pothole_detected = 0;
+            
+            if (pothole_meter > 500) 
+            
             {
                 (Serial.printf("POTHOLE SIZE: " + String(pothole_meter) + "\n"));
-                //publish var to particle cloud, which will activate google cloud function to insert into sql db
-                Particle.publish("my_event", String(pothole_meter), PRIVATE);
+
+                getGPSloc();
+                String cSTR = szInfo;
+                String returnstring = "pothole detected," + cSTR;
+                Particle.publish("my_event", returnstring, PRIVATE);
                 pothole_meter = 0;
+                pothole_detected = 1;
             } else
             {
                 pothole_meter = 0;
@@ -99,8 +107,46 @@ bool spike(double baseline, double current, double treshold)
     if (percent > treshold)
     {
         return true;
-    }else {
+    } else {
         return false;
     }
+    
+}
+
+void getGPSloc()
+
+{
+    //TinyGPS gps;
+    bool isValidGPS = false;
+    
+    
+    for (unsigned long start = millis(); millis() - start < 1000;){
+        // Check GPS data is available
+        while (Serial1.available()){
+            char c = Serial1.read();
+            
+            // parse GPS data
+            if (gps.encode(c))
+                isValidGPS = true;
+        }
+    }
+
+    // If we have a valid GPS location then publish it
+    if (isValidGPS){
+        float lat, lon;
+        unsigned long age;
+    
+        gps.f_get_position(&lat, &lon, &age);
+        
+        sprintf(szInfo, "%.6f,%.6f", (lat == TinyGPS::GPS_INVALID_F_ANGLE ? 0.0 : lat), (lon == TinyGPS::GPS_INVALID_F_ANGLE ? 0.0 : lon));
+    }
+    else{
+        // Not a vlid GPS location, jsut pass 0.0,0.0
+        // This is not correct because 0.0,0.0 is a valid GPS location, we have to pass a invalid GPS location
+        // and check it at the client side
+        sprintf(szInfo, "0.0,0.0");
+    }
+    
+        Spark.publish("gpsloc", szInfo);
     
 }
